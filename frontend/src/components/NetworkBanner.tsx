@@ -52,13 +52,18 @@ export default function NetworkBanner() {
   useEffect(() => {
     if (socketStatus === "reconnecting") {
       const backoffMs = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 30000);
-      setReconnectCountdown(Math.floor(backoffMs / 1000));
+      const timer = setTimeout(() => {
+        setReconnectCountdown(Math.floor(backoffMs / 1000));
+      }, 0);
 
       const interval = setInterval(() => {
         setReconnectCountdown((prev) => Math.max(0, prev - 1));
       }, 1000);
 
-      return () => clearInterval(interval);
+      return () => {
+        clearTimeout(timer);
+        clearInterval(interval);
+      };
     }
   }, [socketStatus, reconnectAttempts]);
 
