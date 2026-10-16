@@ -26,11 +26,12 @@ describe("Distributed Lock", () => {
   });
 
   afterEach(() => {
-    jest.runOnlyPendingTimers();
+    jest.clearAllTimers();
     jest.useRealTimers();
   });
 
   it("should execute functions serially with in-memory fallback", async () => {
+    jest.useRealTimers();
     getRedisClient.mockReturnValue(null);
     let concurrentCount = 0;
 
@@ -98,17 +99,17 @@ describe("Distributed Lock", () => {
     };
 
     const lockPromise = withLock("match-123", 10000, longOperation, { autoRenew: true });
+    // Flush microtasks so acquireLock finishes and longOperation starts at time 0
+    await jest.advanceTimersByTimeAsync(0);
 
     // Advance timers to simulate the long operation
-    jest.advanceTimersByTime(3000); // First renewal
-    await Promise.resolve();
+    await jest.advanceTimersByTimeAsync(3000); // First renewal
     expect(mockRedis.eval).toHaveBeenCalledTimes(1);
 
-    jest.advanceTimersByTime(3000); // Second renewal
-    await Promise.resolve();
+    await jest.advanceTimersByTimeAsync(3000); // Second renewal
     expect(mockRedis.eval).toHaveBeenCalledTimes(2);
 
-    jest.advanceTimersByTime(100); // Complete the operation
+    await jest.advanceTimersByTimeAsync(100); // Complete the operation
     const result = await lockPromise;
 
     expect(result).toBe("success");
@@ -164,7 +165,7 @@ describe("Distributed Lock", () => {
   it("should handle errors during heartbeat renewal gracefully", async () => {
     getRedisClient.mockReturnValue(mockRedis);
     mockRedis.set.mockResolvedValue("OK");
-    mockRedis.eval.mockRejectedValue(new Error("Redis connection lost"));
+    mockRedis.eval.mockRejectedValueOnce(new Error("Redis connection lost")).mockResolvedValue(1);
 
     const lock = await acquireLock("test-key", 10000, { autoRenew: true });
 
